@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "biomeinjectionfix",
+  "version": "1.0.0",
+  "name": "Biome Injection Fix",
+  "description": "Fixes dead BiomeManager.addBiome() on Forge/NeoForge 1.18.2-1.20.1 via Mixin. Generic API for biome injection.",
+  "authors": ["EricAStalee"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.bicbiomecraft.biomefix.BiomeInjectionFix"]
+  },
+  "mixins": ["biomeinjectionfix.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": "~1.20.1"
+  }
+}

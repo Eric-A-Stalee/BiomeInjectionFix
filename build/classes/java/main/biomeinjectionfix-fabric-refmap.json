@@ -1,0 +1,14 @@
+{
+  "mappings": {
+    "com/bicbiomecraft/biomefix/mixin/OverworldBiomeBuilderMixin": {
+      "addBiomes": "Lnet/minecraft/class_6554;method_38185(Ljava/util/function/Consumer;)V"
+    }
+  },
+  "data": {
+    "named:intermediary": {
+      "com/bicbiomecraft/biomefix/mixin/OverworldBiomeBuilderMixin": {
+        "addBiomes": "Lnet/minecraft/class_6554;method_38185(Ljava/util/function/Consumer;)V"
+      }
+    }
+  }
+}
