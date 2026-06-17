@@ -89,18 +89,36 @@ Drop `biomeinjectionfix-1.0.0.jar` into your `mods/` folder alongside any mod th
 
 - **Forge 1.20.1** (47.x) — works
 - **NeoForge 1.20.1** (47.1.x) — works
+- **Fabric 1.20.1** — works (see `fabric` branch)
 - **Forge 1.18.2 / 1.19.4** — should work (same dead API, same Mixin target)
 - **NeoForge 1.21.1+** — may not be needed if NeoForge fixed `addBiome()`. Check before including.
 
-The Mixin targets both Mojang-mapped (`addBiomes`) and SRG-mapped (`m_187175_`) method names for cross-loader compatibility.
+The Forge/NeoForge build targets both Mojang-mapped (`addBiomes`) and SRG-mapped (`m_187175_`) method names for cross-loader compatibility. The Fabric build uses Mojang mappings only.
+
+## Branches
+
+| Branch | Loader | Build system |
+|--------|--------|-------------|
+| `main` | Forge / NeoForge | ModDevGradle legacyforge |
+| `fabric` | Fabric | Fabric Loom |
+
+The API (`BiomeInjectionAPI.register()`) is identical across both branches. Only the build system, mod entrypoint, and metadata format differ.
 
 ## Building
 
+**Forge / NeoForge** (`main` branch):
 ```bash
 ./gradlew build
+# Output: build/libs/biomeinjectionfix-1.0.0.jar
 ```
 
-Requires JDK 17. Output jar is at `build/libs/biomeinjectionfix-1.0.0.jar`.
+**Fabric** (`fabric` branch):
+```bash
+./gradlew build
+# Output: build/libs/biomeinjectionfix-fabric-1.0.0.jar
+```
+
+Requires JDK 17.
 
 ## License
 
