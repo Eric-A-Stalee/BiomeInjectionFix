@@ -75,18 +75,11 @@ public class YourMod {
 
 ### Climate Parameters
 
-The six climate parameters determine where your biome generates:
+Each biome declares a "box" in a 6-dimensional space (temperature, humidity, continentalness, erosion, depth, weirdness). At every world position, Minecraft samples six noise values and picks the biome whose box is the closest match. Think of it like declaring "my biome goes in hot, dry, inland, flat areas" — but in precise numeric ranges.
 
-| Parameter | What it controls | Typical ranges |
-|-----------|-----------------|----------------|
-| Temperature | Hot vs cold | -1.0 (frozen) to 1.0 (desert) |
-| Humidity | Wet vs dry | -1.0 (arid) to 1.0 (tropical) |
-| Continentalness | Coast vs inland | -0.19 (ocean) to 1.0 (deep inland) |
-| Erosion | Flat vs mountainous | -1.0 (peaks) to 1.0 (flat plains) |
-| Depth | Surface vs cave | 0.0 for surface biomes |
-| Weirdness | Biome variant selection | -1.0 to 1.0 |
+The tricky part: vanilla biomes already cover the entire space perfectly. Your modded biome doesn't claim empty territory — it competes with vanilla biomes for the same regions. Where your box overlaps a vanilla box and the noise lands inside both, the game picks one based on internal tie-breaking. This means **where you position your box matters more than how big you make it.**
 
-Your biome generates wherever its parameter box is the closest match to the sampled noise values. Vanilla biomes tile the entire parameter space at fitness 0, so your biome wins by exact-fitness ties — the box shape and position matter more than the box size.
+For a detailed explanation of how the parameter system works, how to tune your biome's prevalence, how the R-tree selection works, and how this interacts with mods like ReTerraForged and Distant Horizons, see **[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)**.
 
 ### For players
 
