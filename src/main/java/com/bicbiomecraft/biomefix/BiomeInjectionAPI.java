@@ -15,6 +15,7 @@ public final class BiomeInjectionAPI {
     private static final Map<String, Float> modTargets = new LinkedHashMap<>();
     private static final List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> moddedEntries = new ArrayList<>();
     private static final Map<ResourceKey<Biome>, Integer> familyAssignments = new LinkedHashMap<>();
+    private static final Map<ResourceKey<Biome>, Float> biomeDefaultTargets = new LinkedHashMap<>();
     private static boolean fired = false;
 
     public static void register(String modId, float defaultTarget,
@@ -49,6 +50,14 @@ public final class BiomeInjectionAPI {
     public static int getFamily(ResourceKey<Biome> key) {
         Integer idx = familyAssignments.get(key);
         return idx != null ? idx : -1;
+    }
+
+    public static void setDefaultTarget(ResourceKey<Biome> biomeKey, float target) {
+        biomeDefaultTargets.put(biomeKey, target);
+    }
+
+    public static Float getBiomeDefaultTarget(ResourceKey<Biome> key) {
+        return biomeDefaultTargets.get(key);
     }
 
     public static boolean isModdedBiome(ResourceKey<Biome> key) {

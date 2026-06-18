@@ -64,6 +64,10 @@ public final class PrevalenceConfig {
         if (modId != null && modOverrides.containsKey(modId)) {
             return Math.min(modOverrides.get(modId), globalTarget);
         }
+        Float biomeDefault = BiomeInjectionAPI.getBiomeDefaultTarget(biomeKey);
+        if (biomeDefault != null) {
+            return Math.min(biomeDefault, globalTarget);
+        }
         if (modId != null) {
             Float modDefault = BiomeInjectionAPI.getModTargets().get(modId);
             if (modDefault != null) {
@@ -160,7 +164,8 @@ public final class PrevalenceConfig {
             Collections.sort(biomes);
             for (String biomeId : biomes) {
                 JsonObject biomeObj = new JsonObject();
-                biomeObj.addProperty("_default", modDefault);
+                Float biomeDefault = findBiomeDefault(biomeId);
+                biomeObj.addProperty("_default", biomeDefault != null ? biomeDefault : modDefault);
                 biomeObj.add("target", biomeOverrides.containsKey(biomeId)
                         ? new JsonPrimitive(biomeOverrides.get(biomeId)) : JsonNull.INSTANCE);
                 biomesObj.add(biomeId, biomeObj);
@@ -171,5 +176,19 @@ public final class PrevalenceConfig {
 
         root.add("mods", modsObj);
         return root;
+    }
+
+    private static Float findBiomeDefault(String biomeId) {
+        for (var entry : BiomeInjectionAPI.getFamilyAssignments().entrySet()) {
+            if (entry.getKey().location().toString().equals(biomeId)) {
+                return BiomeInjectionAPI.getBiomeDefaultTarget(entry.getKey());
+            }
+        }
+        for (var entry : BiomeInjectionAPI.getBiomeOwnership().entrySet()) {
+            if (entry.getKey().location().toString().equals(biomeId)) {
+                return BiomeInjectionAPI.getBiomeDefaultTarget(entry.getKey());
+            }
+        }
+        return null;
     }
 }
