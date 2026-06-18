@@ -16,7 +16,7 @@ import java.util.function.Consumer;
 @Mixin(OverworldBiomeBuilder.class)
 public class OverworldBiomeBuilderMixin {
 
-    @Inject(method = {"addBiomes", "m_187175_"}, at = @At("TAIL"))
+    @Inject(method = "addBiomes", at = @At("TAIL"))
     protected void biomeinjectionfix$fireCallbacks(
             Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> consumer,
             CallbackInfo ci) {

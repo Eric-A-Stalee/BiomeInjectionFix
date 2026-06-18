@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="biomeinjectionfix"
+version="${mod_version}"
+displayName="Biome Injection Fix"
+authors="EricAStalee"
+description='''Provides BiomeInjectionAPI.register() for any mod to inject biomes into OverworldBiomeBuilder.addBiomes() with proper climate parameters. Includes per-mod/per-biome prevalence filtering with family-based spatial coherence.'''
+
+[[mixins]]
+config="biomeinjectionfix.mixins.json"
+
+[[dependencies.biomeinjectionfix]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.biomeinjectionfix]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"

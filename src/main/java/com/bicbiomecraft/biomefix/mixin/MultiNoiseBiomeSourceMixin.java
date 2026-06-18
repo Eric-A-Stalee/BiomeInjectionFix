@@ -17,8 +17,7 @@ public class MultiNoiseBiomeSourceMixin {
     @Unique
     private volatile BiomePrevalenceFilter.InstanceState biomeinjectionfix$state;
 
-    @Inject(method = {"getNoiseBiome(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;",
-                       "m_203407_"},
+    @Inject(method = "getNoiseBiome(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;",
             at = @At("RETURN"), cancellable = true)
     private void biomeinjectionfix$filterPrevalence(int x, int y, int z,
             Climate.Sampler sampler, CallbackInfoReturnable<Holder<Biome>> cir) {
