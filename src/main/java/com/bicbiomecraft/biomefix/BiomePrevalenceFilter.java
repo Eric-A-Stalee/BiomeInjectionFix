@@ -68,8 +68,10 @@ public final class BiomePrevalenceFilter {
         LOGGER.info("Prevalence filter active: {} modded biomes, noise scale {} / {} blocks (octave2 amp {})",
                 moddedPairs.size(), (int) noiseScale, (int) noiseOctave2Scale, noiseOctave2Amplitude);
 
-        return new InstanceState(moddedRTree, noise1, noise2, noiseScale, noiseOctave2Scale, noiseOctave2Amplitude);
+        return new InstanceState(moddedRTree, worldSeed, noise1, noise2, noiseScale, noiseOctave2Scale, noiseOctave2Amplitude);
     }
+
+    private static final double TRANSITION_WIDTH = 0.15;
 
     public static Holder<Biome> filter(InstanceState state, Holder<Biome> original,
             int qx, int qy, int qz, Climate.Sampler sampler) {
@@ -91,6 +93,9 @@ public final class BiomePrevalenceFilter {
         double maxRange = 1.0 + state.octave2Amplitude;
         float noiseUnit = (float) Math.max(0.0, Math.min(1.0, (combined / maxRange + 1.0) * 0.5));
 
+        float jitter = positionJitter(state.seed, qx, qz, TRANSITION_WIDTH);
+        noiseUnit += jitter;
+
         Climate.TargetPoint target = sampler.sample(qx, qy, qz);
         Holder<Biome> candidate = state.moddedRTree.findValue(target);
         ResourceKey<Biome> candidateKey = candidate.unwrapKey().orElse(null);
@@ -106,20 +111,33 @@ public final class BiomePrevalenceFilter {
         return original;
     }
 
+    static float positionJitter(long seed, int qx, int qz) {
+        return positionJitter(seed, qx, qz, TRANSITION_WIDTH);
+    }
+
+    static float positionJitter(long seed, int qx, int qz, double width) {
+        long h = seed ^ ((long) qx * 0x6C62272E07BB0142L) ^ ((long) qz * 0x517CC1B727220A95L);
+        h = h * 6364136223846793005L + 1442695040888963407L;
+        h ^= (h >>> 32);
+        return (float) (((h & 0xFFFFL) / (double) 0xFFFFL - 0.5) * width);
+    }
+
     public static class InstanceState {
-        static final InstanceState NOOP = new InstanceState(null, null, null, 0, 0, 0);
+        static final InstanceState NOOP = new InstanceState(null, 0, null, null, 0, 0, 0);
 
         final Climate.ParameterList<Holder<Biome>> moddedRTree;
+        final long seed;
         final SimplexNoise2D noise1;
         final SimplexNoise2D noise2;
         final double noiseScale;
         final double octave2Scale;
         final double octave2Amplitude;
 
-        InstanceState(Climate.ParameterList<Holder<Biome>> moddedRTree,
+        InstanceState(Climate.ParameterList<Holder<Biome>> moddedRTree, long seed,
                 SimplexNoise2D noise1, SimplexNoise2D noise2,
                 double noiseScale, double octave2Scale, double octave2Amplitude) {
             this.moddedRTree = moddedRTree;
+            this.seed = seed;
             this.noise1 = noise1;
             this.noise2 = noise2;
             this.noiseScale = noiseScale;
