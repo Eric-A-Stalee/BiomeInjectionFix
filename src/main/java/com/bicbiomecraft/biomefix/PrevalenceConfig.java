@@ -16,7 +16,9 @@ public final class PrevalenceConfig {
     private static PrevalenceConfig instance;
 
     private float globalTarget = 0.50f;
-    private Integer cellSizeOverride = null;
+    private double noiseScale = 2500.0;
+    private double noiseOctave2Scale = 600.0;
+    private double noiseOctave2Amplitude = 0.4;
     private final Map<String, Float> modOverrides = new HashMap<>();
     private final Map<String, Float> biomeOverrides = new HashMap<>();
 
@@ -35,8 +37,16 @@ public final class PrevalenceConfig {
         return globalTarget;
     }
 
-    public Integer getCellSizeOverride() {
-        return cellSizeOverride;
+    public double getNoiseScale() {
+        return noiseScale;
+    }
+
+    public double getNoiseOctave2Scale() {
+        return noiseOctave2Scale;
+    }
+
+    public double getNoiseOctave2Amplitude() {
+        return noiseOctave2Amplitude;
     }
 
     public float getEffectiveTarget(ResourceKey<Biome> biomeKey) {
@@ -56,23 +66,6 @@ public final class PrevalenceConfig {
             }
         }
         return 0.0f;
-    }
-
-    void updateAutoCellSize(int autoSize) {
-        Path configFile = Path.of("config", "biomeinjectionfix-prevalence.json");
-        if (!Files.exists(configFile)) return;
-        try {
-            JsonObject json;
-            try (Reader reader = Files.newBufferedReader(configFile)) {
-                json = JsonParser.parseReader(reader).getAsJsonObject();
-            }
-            json.addProperty("_cell_size_auto", autoSize);
-            try (Writer writer = Files.newBufferedWriter(configFile)) {
-                new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(json, writer);
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to update auto cell size in config", e);
-        }
     }
 
     private void loadAndMerge() {
@@ -103,8 +96,14 @@ public final class PrevalenceConfig {
         if (json.has("global_target")) {
             globalTarget = json.get("global_target").getAsFloat();
         }
-        if (json.has("cell_size") && !json.get("cell_size").isJsonNull()) {
-            cellSizeOverride = json.get("cell_size").getAsInt();
+        if (json.has("noise_scale") && !json.get("noise_scale").isJsonNull()) {
+            noiseScale = json.get("noise_scale").getAsDouble();
+        }
+        if (json.has("noise_octave2_scale") && !json.get("noise_octave2_scale").isJsonNull()) {
+            noiseOctave2Scale = json.get("noise_octave2_scale").getAsDouble();
+        }
+        if (json.has("noise_octave2_amplitude") && !json.get("noise_octave2_amplitude").isJsonNull()) {
+            noiseOctave2Amplitude = json.get("noise_octave2_amplitude").getAsDouble();
         }
         if (!json.has("mods")) return;
         JsonObject mods = json.getAsJsonObject("mods");
@@ -127,8 +126,9 @@ public final class PrevalenceConfig {
     private JsonObject buildMergedConfig() {
         JsonObject root = new JsonObject();
         root.addProperty("global_target", globalTarget);
-        root.add("cell_size", cellSizeOverride != null ? new JsonPrimitive(cellSizeOverride) : JsonNull.INSTANCE);
-        root.add("_cell_size_auto", JsonNull.INSTANCE);
+        root.addProperty("noise_scale", noiseScale);
+        root.addProperty("noise_octave2_scale", noiseOctave2Scale);
+        root.addProperty("noise_octave2_amplitude", noiseOctave2Amplitude);
 
         Map<String, List<String>> modBiomes = new LinkedHashMap<>();
         for (var entry : BiomeInjectionAPI.getBiomeOwnership().entrySet()) {

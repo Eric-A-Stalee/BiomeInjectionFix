@@ -52,63 +52,23 @@ public final class BiomePrevalenceFilter {
                 + probe.continentalness() * 41 + probe.erosion() * 43
                 + probe.depth() * 47 + probe.weirdness() * 53;
 
-        int cellSize = calibrateCellSize(allParams, sampler);
-
         PrevalenceConfig config = PrevalenceConfig.instance();
-        if (config != null && config.getCellSizeOverride() != null) {
-            cellSize = config.getCellSizeOverride();
-            LOGGER.info("Using config cell size override: {} blocks", cellSize);
-        }
-
-        int cellSizeQuarts = Math.max(1, cellSize / 4);
-        int cellShift = Integer.numberOfTrailingZeros(Integer.highestOneBit(cellSizeQuarts));
-
+        double noiseScale = 2500.0;
+        double noiseOctave2Scale = 600.0;
+        double noiseOctave2Amplitude = 0.4;
         if (config != null) {
-            config.updateAutoCellSize(cellSize);
+            noiseScale = config.getNoiseScale();
+            noiseOctave2Scale = config.getNoiseOctave2Scale();
+            noiseOctave2Amplitude = config.getNoiseOctave2Amplitude();
         }
 
-        LOGGER.info("Prevalence filter active: {} modded biomes, cell size {} blocks (shift {})",
-                moddedPairs.size(), cellSize, cellShift);
+        SimplexNoise2D noise1 = new SimplexNoise2D(worldSeed);
+        SimplexNoise2D noise2 = new SimplexNoise2D(worldSeed ^ 0x9E3779B97F4A7C15L);
 
-        return new InstanceState(moddedRTree, worldSeed, cellShift);
-    }
+        LOGGER.info("Prevalence filter active: {} modded biomes, noise scale {} / {} blocks (octave2 amp {})",
+                moddedPairs.size(), (int) noiseScale, (int) noiseOctave2Scale, noiseOctave2Amplitude);
 
-    private static int calibrateCellSize(Climate.ParameterList<Holder<Biome>> params, Climate.Sampler sampler) {
-        int gridSize = 16;
-        int spacing = 64;
-        int transitions = 0;
-        int totalPairs = 0;
-
-        for (int gx = 0; gx < gridSize; gx++) {
-            Holder<Biome> prev = null;
-            for (int gz = 0; gz < gridSize; gz++) {
-                int qx = gx * spacing;
-                int qz = gz * spacing;
-                Climate.TargetPoint target = sampler.sample(qx, 0, qz);
-                Holder<Biome> current = params.findValue(target);
-                if (prev != null) {
-                    totalPairs++;
-                    if (current != prev) {
-                        transitions++;
-                    }
-                }
-                prev = current;
-            }
-        }
-
-        if (transitions == 0) {
-            LOGGER.debug("No biome transitions detected in sample — using default cell size 1024");
-            return 1024;
-        }
-
-        float avgTransitionBlocks = (float) (totalPairs * spacing * 4) / transitions;
-        int cellSize = Integer.highestOneBit((int) avgTransitionBlocks);
-        cellSize = Math.max(256, Math.min(4096, cellSize));
-
-        LOGGER.info("Auto-calibrated cell size: {} blocks (avg biome span: {} blocks, {} transitions in sample)",
-                cellSize, (int) avgTransitionBlocks, transitions);
-
-        return cellSize;
+        return new InstanceState(moddedRTree, noise1, noise2, noiseScale, noiseOctave2Scale, noiseOctave2Amplitude);
     }
 
     public static Holder<Biome> filter(InstanceState state, Holder<Biome> original,
@@ -123,10 +83,13 @@ public final class BiomePrevalenceFilter {
         PrevalenceConfig config = PrevalenceConfig.instance();
         if (config == null) return original;
 
-        long cellX = (long) qx >> state.cellShift;
-        long cellZ = (long) qz >> state.cellShift;
-        long cellHash = hashCell(state.worldSeed, cellX, cellZ);
-        float cellUnit = (cellHash & 0xFFFFFFFFL) / (float) 0x100000000L;
+        double blockX = qx * 4.0;
+        double blockZ = qz * 4.0;
+        double n1 = state.noise1.sample(blockX / state.noiseScale, blockZ / state.noiseScale);
+        double n2 = state.noise2.sample(blockX / state.octave2Scale, blockZ / state.octave2Scale);
+        double combined = n1 + n2 * state.octave2Amplitude;
+        double maxRange = 1.0 + state.octave2Amplitude;
+        float noiseUnit = (float) Math.max(0.0, Math.min(1.0, (combined / maxRange + 1.0) * 0.5));
 
         Climate.TargetPoint target = sampler.sample(qx, qy, qz);
         Holder<Biome> candidate = state.moddedRTree.findValue(target);
@@ -136,34 +99,32 @@ public final class BiomePrevalenceFilter {
         float prevalenceTarget = config.getEffectiveTarget(candidateKey);
         if (prevalenceTarget <= 0) return original;
 
-        if (cellUnit < prevalenceTarget) {
+        if (noiseUnit < prevalenceTarget) {
             return candidate;
         }
 
         return original;
     }
 
-    private static long hashCell(long seed, long cellX, long cellZ) {
-        long hash = seed;
-        hash = hash * 6364136223846793005L + 1442695040888963407L;
-        hash += cellX;
-        hash = hash * 6364136223846793005L + 1442695040888963407L;
-        hash += cellZ;
-        hash = hash * 6364136223846793005L + 1442695040888963407L;
-        return hash;
-    }
-
     public static class InstanceState {
-        static final InstanceState NOOP = new InstanceState(null, 0, 0);
+        static final InstanceState NOOP = new InstanceState(null, null, null, 0, 0, 0);
 
         final Climate.ParameterList<Holder<Biome>> moddedRTree;
-        final long worldSeed;
-        final int cellShift;
+        final SimplexNoise2D noise1;
+        final SimplexNoise2D noise2;
+        final double noiseScale;
+        final double octave2Scale;
+        final double octave2Amplitude;
 
-        InstanceState(Climate.ParameterList<Holder<Biome>> moddedRTree, long worldSeed, int cellShift) {
+        InstanceState(Climate.ParameterList<Holder<Biome>> moddedRTree,
+                SimplexNoise2D noise1, SimplexNoise2D noise2,
+                double noiseScale, double octave2Scale, double octave2Amplitude) {
             this.moddedRTree = moddedRTree;
-            this.worldSeed = worldSeed;
-            this.cellShift = cellShift;
+            this.noise1 = noise1;
+            this.noise2 = noise2;
+            this.noiseScale = noiseScale;
+            this.octave2Scale = octave2Scale;
+            this.octave2Amplitude = octave2Amplitude;
         }
 
         boolean isNoop() {
