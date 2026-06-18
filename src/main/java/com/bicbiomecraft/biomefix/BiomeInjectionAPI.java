@@ -5,30 +5,63 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.function.Consumer;
 
-/**
- * Generic API for injecting biomes into OverworldBiomeBuilder.addBiomes().
- *
- * Forge 1.18.2–1.20.1 BiomeManager.addBiome() is dead code — this API
- * provides a working alternative via Mixin. Any mod can register a callback
- * to inject biomes with proper climate parameters.
- */
 public final class BiomeInjectionAPI {
 
-    private static final List<Consumer<Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>>>> callbacks = new ArrayList<>();
+    private static final List<Registration> registrations = new ArrayList<>();
+    private static final Map<ResourceKey<Biome>, String> biomeOwnership = new LinkedHashMap<>();
+    private static final Map<String, Float> modTargets = new LinkedHashMap<>();
+    private static final List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> moddedEntries = new ArrayList<>();
+    private static boolean fired = false;
 
-    public static void register(Consumer<Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>>> callback) {
-        callbacks.add(callback);
+    public static void register(String modId, float defaultTarget,
+            Consumer<Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>>> callback) {
+        registrations.add(new Registration(modId, defaultTarget, callback));
+        modTargets.put(modId, defaultTarget);
     }
 
     public static void fireAll(Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> consumer) {
-        for (var cb : callbacks) {
-            cb.accept(consumer);
+        if (fired) {
+            for (var entry : moddedEntries) {
+                consumer.accept(entry);
+            }
+            return;
         }
+        fired = true;
+        for (var reg : registrations) {
+            reg.callback().accept(pair -> {
+                biomeOwnership.put(pair.getSecond(), reg.modId());
+                moddedEntries.add(pair);
+                consumer.accept(pair);
+            });
+        }
+        PrevalenceConfig.initialize();
+    }
+
+    public static boolean isModdedBiome(ResourceKey<Biome> key) {
+        return biomeOwnership.containsKey(key);
+    }
+
+    public static String getOwner(ResourceKey<Biome> key) {
+        return biomeOwnership.get(key);
+    }
+
+    static Map<ResourceKey<Biome>, String> getBiomeOwnership() {
+        return Collections.unmodifiableMap(biomeOwnership);
+    }
+
+    static Map<String, Float> getModTargets() {
+        return Collections.unmodifiableMap(modTargets);
+    }
+
+    static List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> getModdedEntries() {
+        return Collections.unmodifiableList(moddedEntries);
     }
 
     private BiomeInjectionAPI() {}
+
+    record Registration(String modId, float defaultTarget,
+            Consumer<Consumer<Pair<Climate.ParameterPoint, ResourceKey<Biome>>>> callback) {}
 }

@@ -2,8 +2,11 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.bicbiomecraft.biomefix.mixin",
+  "refmap": "biomeinjectionfix-fabric-refmap.json",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
+    "MultiNoiseBiomeSourceAccessor",
+    "MultiNoiseBiomeSourceMixin",
     "OverworldBiomeBuilderMixin"
   ],
   "injectors": {
