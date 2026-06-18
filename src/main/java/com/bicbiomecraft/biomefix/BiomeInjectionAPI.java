@@ -14,6 +14,7 @@ public final class BiomeInjectionAPI {
     private static final Map<ResourceKey<Biome>, String> biomeOwnership = new LinkedHashMap<>();
     private static final Map<String, Float> modTargets = new LinkedHashMap<>();
     private static final List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> moddedEntries = new ArrayList<>();
+    private static final Map<ResourceKey<Biome>, Integer> familyAssignments = new LinkedHashMap<>();
     private static boolean fired = false;
 
     public static void register(String modId, float defaultTarget,
@@ -40,6 +41,16 @@ public final class BiomeInjectionAPI {
         PrevalenceConfig.initialize();
     }
 
+    public static void setFamily(ResourceKey<Biome> biomeKey, int familyIndex) {
+        if (familyIndex < 0) throw new IllegalArgumentException("familyIndex must be >= 0");
+        familyAssignments.put(biomeKey, familyIndex);
+    }
+
+    public static int getFamily(ResourceKey<Biome> key) {
+        Integer idx = familyAssignments.get(key);
+        return idx != null ? idx : -1;
+    }
+
     public static boolean isModdedBiome(ResourceKey<Biome> key) {
         return biomeOwnership.containsKey(key);
     }
@@ -58,6 +69,10 @@ public final class BiomeInjectionAPI {
 
     static List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> getModdedEntries() {
         return Collections.unmodifiableList(moddedEntries);
+    }
+
+    static Map<ResourceKey<Biome>, Integer> getFamilyAssignments() {
+        return Collections.unmodifiableMap(familyAssignments);
     }
 
     private BiomeInjectionAPI() {}

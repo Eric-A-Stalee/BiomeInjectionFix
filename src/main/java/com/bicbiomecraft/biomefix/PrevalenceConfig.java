@@ -19,6 +19,7 @@ public final class PrevalenceConfig {
     private double noiseScale = 2500.0;
     private double noiseOctave2Scale = 600.0;
     private double noiseOctave2Amplitude = 0.4;
+    private double familyNoiseScale = 1500.0;
     private final Map<String, Float> modOverrides = new HashMap<>();
     private final Map<String, Float> biomeOverrides = new HashMap<>();
 
@@ -47,6 +48,10 @@ public final class PrevalenceConfig {
 
     public double getNoiseOctave2Amplitude() {
         return noiseOctave2Amplitude;
+    }
+
+    public double getFamilyNoiseScale() {
+        return familyNoiseScale;
     }
 
     public float getEffectiveTarget(ResourceKey<Biome> biomeKey) {
@@ -105,6 +110,9 @@ public final class PrevalenceConfig {
         if (json.has("noise_octave2_amplitude") && !json.get("noise_octave2_amplitude").isJsonNull()) {
             noiseOctave2Amplitude = json.get("noise_octave2_amplitude").getAsDouble();
         }
+        if (json.has("family_noise_scale") && !json.get("family_noise_scale").isJsonNull()) {
+            familyNoiseScale = json.get("family_noise_scale").getAsDouble();
+        }
         if (!json.has("mods")) return;
         JsonObject mods = json.getAsJsonObject("mods");
         for (var modEntry : mods.entrySet()) {
@@ -129,6 +137,7 @@ public final class PrevalenceConfig {
         root.addProperty("noise_scale", noiseScale);
         root.addProperty("noise_octave2_scale", noiseOctave2Scale);
         root.addProperty("noise_octave2_amplitude", noiseOctave2Amplitude);
+        root.addProperty("family_noise_scale", familyNoiseScale);
 
         Map<String, List<String>> modBiomes = new LinkedHashMap<>();
         for (var entry : BiomeInjectionAPI.getBiomeOwnership().entrySet()) {
