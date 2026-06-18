@@ -15,6 +15,18 @@ import java.util.*;
 public final class BiomePrevalenceFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("BiomeInjectionFix");
+    private static final long FAMILY_PENALTY = 100_000_000L;
+
+    private static long paramFitness(Climate.ParameterPoint pp, Climate.TargetPoint tp) {
+        long d0 = pp.temperature().distance(tp.temperature());
+        long d1 = pp.humidity().distance(tp.humidity());
+        long d2 = pp.continentalness().distance(tp.continentalness());
+        long d3 = pp.erosion().distance(tp.erosion());
+        long d4 = pp.depth().distance(tp.depth());
+        long d5 = pp.weirdness().distance(tp.weirdness());
+        long d6 = pp.offset();
+        return d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6;
+    }
 
     private BiomePrevalenceFilter() {}
 
@@ -32,20 +44,26 @@ public final class BiomePrevalenceFilter {
             pair.getSecond().unwrapKey().ifPresent(key -> keyToHolder.put(key, pair.getSecond()));
         }
 
-        List<Pair<Climate.ParameterPoint, Holder<Biome>>> moddedPairs = new ArrayList<>();
+        List<ModdedEntry> resolvedEntries = new ArrayList<>();
+        int maxFamilyIndex = -1;
         for (var entry : moddedEntries) {
             Holder<Biome> holder = keyToHolder.get(entry.getSecond());
             if (holder != null) {
-                moddedPairs.add(Pair.of(entry.getFirst(), holder));
+                int familyIndex = BiomeInjectionAPI.getFamily(entry.getSecond());
+                resolvedEntries.add(new ModdedEntry(entry.getFirst(), holder, familyIndex));
+                if (familyIndex > maxFamilyIndex) {
+                    maxFamilyIndex = familyIndex;
+                }
             }
         }
 
-        if (moddedPairs.isEmpty()) {
+        if (resolvedEntries.isEmpty()) {
             LOGGER.debug("No modded biomes resolved in this biome source — filter inactive");
             return InstanceState.NOOP;
         }
 
-        Climate.ParameterList<Holder<Biome>> moddedRTree = new Climate.ParameterList<>(moddedPairs);
+        ModdedEntry[] entries = resolvedEntries.toArray(new ModdedEntry[0]);
+        int familyCount = maxFamilyIndex + 1;
 
         Climate.TargetPoint probe = sampler.sample(0, 0, 0);
         long worldSeed = probe.temperature() * 31 + probe.humidity() * 37
@@ -56,22 +74,30 @@ public final class BiomePrevalenceFilter {
         double noiseScale = 2500.0;
         double noiseOctave2Scale = 600.0;
         double noiseOctave2Amplitude = 0.4;
+        double familyNoiseScale = 1500.0;
         if (config != null) {
             noiseScale = config.getNoiseScale();
             noiseOctave2Scale = config.getNoiseOctave2Scale();
             noiseOctave2Amplitude = config.getNoiseOctave2Amplitude();
+            familyNoiseScale = config.getFamilyNoiseScale();
         }
 
         SimplexNoise2D noise1 = new SimplexNoise2D(worldSeed);
         SimplexNoise2D noise2 = new SimplexNoise2D(worldSeed ^ 0x9E3779B97F4A7C15L);
 
-        LOGGER.info("Prevalence filter active: {} modded biomes, noise scale {} / {} blocks (octave2 amp {})",
-                moddedPairs.size(), (int) noiseScale, (int) noiseOctave2Scale, noiseOctave2Amplitude);
+        SimplexNoise2D[] familyNoises = new SimplexNoise2D[familyCount];
+        for (int i = 0; i < familyCount; i++) {
+            familyNoises[i] = new SimplexNoise2D(worldSeed ^ (i * 0x9E3779B97F4A7C15L + 0xABCDEF0123456789L));
+        }
 
-        return new InstanceState(moddedRTree, worldSeed, noise1, noise2, noiseScale, noiseOctave2Scale, noiseOctave2Amplitude);
+        LOGGER.info("Prevalence filter active: {} modded biomes, {} families, noise scale {} / {} blocks (octave2 amp {})",
+                entries.length, familyCount, (int) noiseScale, (int) noiseOctave2Scale, noiseOctave2Amplitude);
+
+        return new InstanceState(entries, worldSeed, noise1, noise2, noiseScale, noiseOctave2Scale, noiseOctave2Amplitude,
+                familyNoises, familyCount, familyNoiseScale);
     }
 
-    private static final double TRANSITION_WIDTH = 0.15;
+    private static final double TRANSITION_WIDTH = 0.0;
 
     public static Holder<Biome> filter(InstanceState state, Holder<Biome> original,
             int qx, int qy, int qz, Climate.Sampler sampler) {
@@ -97,7 +123,34 @@ public final class BiomePrevalenceFilter {
         noiseUnit += jitter;
 
         Climate.TargetPoint target = sampler.sample(qx, qy, qz);
-        Holder<Biome> candidate = state.moddedRTree.findValue(target);
+
+        int activeFamily = -1;
+        if (state.familyCount > 0) {
+            double bestNoise = Double.NEGATIVE_INFINITY;
+            for (int f = 0; f < state.familyCount; f++) {
+                double fn = state.familyNoises[f].sample(
+                    blockX / state.familyNoiseScale, blockZ / state.familyNoiseScale);
+                if (fn > bestNoise) {
+                    bestNoise = fn;
+                    activeFamily = f;
+                }
+            }
+        }
+
+        Holder<Biome> candidate = null;
+        long bestFitness = Long.MAX_VALUE;
+        for (ModdedEntry entry : state.entries) {
+            long fitness = paramFitness(entry.point, target);
+            if (entry.familyIndex >= 0 && entry.familyIndex != activeFamily) {
+                fitness += FAMILY_PENALTY;
+            }
+            if (fitness < bestFitness) {
+                bestFitness = fitness;
+                candidate = entry.holder;
+            }
+        }
+        if (candidate == null) return original;
+
         ResourceKey<Biome> candidateKey = candidate.unwrapKey().orElse(null);
         if (candidateKey == null) return original;
 
@@ -122,27 +175,45 @@ public final class BiomePrevalenceFilter {
         return (float) (((h & 0xFFFFL) / (double) 0xFFFFL - 0.5) * width);
     }
 
-    public static class InstanceState {
-        static final InstanceState NOOP = new InstanceState(null, 0, null, null, 0, 0, 0);
+    static final class ModdedEntry {
+        final Climate.ParameterPoint point;
+        final Holder<Biome> holder;
+        final int familyIndex;
+        ModdedEntry(Climate.ParameterPoint point, Holder<Biome> holder, int familyIndex) {
+            this.point = point;
+            this.holder = holder;
+            this.familyIndex = familyIndex;
+        }
+    }
 
-        final Climate.ParameterList<Holder<Biome>> moddedRTree;
+    public static class InstanceState {
+        static final InstanceState NOOP = new InstanceState(null, 0, null, null, 0, 0, 0, null, 0, 0);
+
+        final ModdedEntry[] entries;
         final long seed;
         final SimplexNoise2D noise1;
         final SimplexNoise2D noise2;
         final double noiseScale;
         final double octave2Scale;
         final double octave2Amplitude;
+        final SimplexNoise2D[] familyNoises;
+        final int familyCount;
+        final double familyNoiseScale;
 
-        InstanceState(Climate.ParameterList<Holder<Biome>> moddedRTree, long seed,
+        InstanceState(ModdedEntry[] entries, long seed,
                 SimplexNoise2D noise1, SimplexNoise2D noise2,
-                double noiseScale, double octave2Scale, double octave2Amplitude) {
-            this.moddedRTree = moddedRTree;
+                double noiseScale, double octave2Scale, double octave2Amplitude,
+                SimplexNoise2D[] familyNoises, int familyCount, double familyNoiseScale) {
+            this.entries = entries;
             this.seed = seed;
             this.noise1 = noise1;
             this.noise2 = noise2;
             this.noiseScale = noiseScale;
             this.octave2Scale = octave2Scale;
             this.octave2Amplitude = octave2Amplitude;
+            this.familyNoises = familyNoises;
+            this.familyCount = familyCount;
+            this.familyNoiseScale = familyNoiseScale;
         }
 
         boolean isNoop() {
